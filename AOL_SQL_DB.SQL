@@ -398,3 +398,74 @@ COMMIT;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+
+CREATE VIEW `view_product_sales_summary` AS
+SELECT 
+    p.productcode,
+    p.productname,
+    p.brand,
+    IFNULL(SUM(t_out.quantity), 0) AS total_quantity_sold,
+    IFNULL(SUM(t_out.revenue), 0.00) AS total_revenue,
+    IFNULL(cs.quantity, 0) AS current_stock
+FROM 
+    `products` p
+LEFT JOIN 
+    `transaction_out` t_out ON p.productcode = t_out.productcode
+LEFT JOIN
+    `currentstock` cs ON p.productcode = cs.productcode
+GROUP BY
+    p.productcode, p.productname, p.brand, cs.quantity;
+
+DELIMITER //
+
+CREATE PROCEDURE `sp_AddNewProduct` (
+    IN p_productcode VARCHAR(45),
+    IN p_productname VARCHAR(45),
+    IN p_unit VARCHAR(45),
+    IN p_sellprice DOUBLE,
+    IN p_brand VARCHAR(45),
+    IN p_initial_quantity INT
+)
+BEGIN
+    START TRANSACTION;
+    IF EXISTS (SELECT 1 FROM `products` WHERE `productcode` = p_productcode) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: Product code already exists.';
+    ELSE
+        INSERT INTO `products` (`productcode`, `productname`, `unit`, `sellprice`, `brand`)
+        VALUES (p_productcode, p_productname, p_unit, p_sellprice, p_brand);
+        INSERT INTO `currentstock` (`productcode`, `quantity`)
+        VALUES (p_productcode, IFNULL(p_initial_quantity, 0));
+    END IF;
+    COMMIT;
+END //
+
+DELIMITER //
+
+CREATE PROCEDURE `sp_AddNewUser` (
+    IN p_name VARCHAR(45),
+    IN p_location VARCHAR(45),
+    IN p_phone VARCHAR(10),
+    IN p_username VARCHAR(20),
+    IN p_password VARCHAR(200),
+    IN p_usertype VARCHAR(45)
+)
+BEGIN
+    START TRANSACTION;
+    IF EXISTS (SELECT 1 FROM `users` WHERE `username` = p_username) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Error: Username already exists.';
+    ELSE
+        INSERT INTO `users` (`name`, `location`, `phone`, `username`, `password`, `usertype`)
+        VALUES (p_name, p_location, p_phone, p_username, p_password, p_usertype);
+    END IF;
+    COMMIT;
+END //
+
+DELIMITER ;
+
+CALL sp_AddNewProduct('PROD-8', 'Beras Premium', 'Karung', 120000, 'Berasku', 50);
+CALL sp_AddNewProduct('PROD-9', 'Minuman Energi', 'Dus', 50000, 'EnergiMax', 0);
+CALL sp_AddNewProduct('PROD-10', 'Teh Botol', 'Botol', 30000, 'Tehku', NULL);
+
+CALL sp_AddNewUser('Alice Johnson', 'Surabaya', '0834567890', 'alicej', 'hashed_pw_alice', 'ADMINISTRATOR');
+CALL sp_AddNewUser('Bob Williams', 'Medan', '0845678901', 'bobw', 'hashed_pw_bob', 'STAFF');
+CALL sp_AddNewUser('Charlie Brown', 'Makassar', '0856789012', 'alicej', 'hashed_pw_charlie', 'STAFF');
